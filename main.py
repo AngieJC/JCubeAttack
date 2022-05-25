@@ -24,36 +24,64 @@ def KeyScheduleSingle(m, r):
             m.addConstr(RK_i_1 == K_i_1_2)
             m.addConstr(RK_i_1 == flag)
 
-def L1(m, a, b, c):
-    m.addConstr(c == a)
-    m.addConstr(c == b)
+# AND
+def L1(m, a, b, c, copys):
+    if len(copys) == 0:
+        m.addConstr(c == a)
+        m.addConstr(c == b)
+    elif len(copys) == 2:
+        m.addConstr(copys[0] <= a)
+        m.addConstr(copys[1] <= a)
+        m.addConstr(a <= copys[0] + copys[1])
+        m.addConstr(c == copys[1])
+        m.addConstr(c == b)
+    elif len(copys) == 4:
+        m.addConstr(copys[0] <= a)
+        m.addConstr(copys[1] <= a)
+        m.addConstr(a <= copys[0] + copys[1])
+        m.addConstr(copys[2] <= b)
+        m.addConstr(copys[3] <= b)
+        m.addConstr(b <= copys[2] + copys[3])
+        m.addConstr(c == copys[1])
+        m.addConstr(c == copys[3])
 
-def L2(m, a, b, c):
-    m.addConstr(c >= b)
-    m.addConstr(c == a + b)
+# XOR
+def L2(m, a, b, c, copys):
+    if len(copys) == 0:
+        m.addConstr(c >= b)
+        m.addConstr(c == a + b)
+    elif len(copys) == 2:
+        m.addConstr(copys[0] <= a)
+        m.addConstr(copys[1] <= a)
+        m.addConstr(a <= copys[0] + copys[1])
+        m.addConstr(c >= b)
+        m.addConstr(c == copys[1] + b)
+    elif len(copys) == 4:
+        m.addConstr(copys[2] <= b)
+        m.addConstr(copys[3] <= b)
+        m.addConstr(b <= copys[2] + copys[3])
+        m.addConstr(c >= copys[3])
+        m.addConstr(c == copys[1] + copys[3])
 
+# 3比特XOR
 def L3(m, a, b, c, d):
     m.addConstr(d == a + b + c)
     m.addConstr(d >= a + b)
 
 def GenerateJModel(r):
-    # New MILP model M
     m = Model("JSuperPoly")
-
-    # M.var ← u^0[0..31]
-    # M.var ← K[0..63]
-    u0 = []
+    L0 = []
+    R0 = []
     K = []
     flag = []
-    for i in range(32):
-        u0.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="u^0_" + str(i)))
-        K.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="K_" + str(2 * i)))
-        flag.append(m.addVar(lb=0.0, ub=2.0, vtype=GRB.INTEGER, name="flag_" + str(2 * i)))
-        K.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="K_" + str(2 * i + 1)))
-        flag.append(m.addVar(lb=0.0, ub=2.0, vtype=GRB.INTEGER, name="flag_" + str(2 * i + 1)))
-    u = u0
+    for i in range(16):
+        L0.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="L^0_" + str(i)))
+        R0.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="R^0_" + str(i)))
+    for i in range(64):
+        K.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="K_" + str(i)))
+        flag.append(m.addVar(lb=0.0, ub=2.0, vtype=GRB.INTEGER, name="flag_" + str(i)))
+    u = L0 + R0
 
-    # for i = 1; i <= r; i ← i + 1 do
     for i in range(1, r + 1):
         RK = []
         a = []
@@ -85,7 +113,13 @@ def GenerateJModel(r):
         for j in range(14):
             d.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="d^" + str(i) + "_" + str(j)))
         for j in range(16):
-            L1(m, RK[j], u[j], a[j])
+            RK_copy1 = m.addVar(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy1"))
+            RK_copy2 = m.addVar(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy2"))
+            L_copy1 = m.addVar(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="L^" + str(i - 1) + "_" + str(j) + "_copy1"))
+            L_copy2 = m.addVar(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="L^" + str(i - 1) + "_" + str(j) + "_copy2"))
+            L1(m, RK[j], u[j], a[j], [RK_copy1, RK_copy2, L_copy1, L_copy2])
+            RK[j] = RK_copy1
+            u[j] = L_copy1
             if con_i[j] == 1:
                 L2(m, u[j + 16], constant_i_var[0], b[j])
                 del(constant_i_var[0])
@@ -111,10 +145,45 @@ def GenerateJModel(r):
     return m
 
 
-def main():
-    m = GenerateJModel(8)
+def SearchDegree(m, r, I):
+    for i in range(32):
+        if i < 16:
+            u0 = m.getVarByName("L^0_" + str(i))
+        else:
+            u0 = m.getVarByName("R^0_" + str(i - 16))
+        if i in I:
+            # 公开变量(明文)中立方元素全为1
+            m.addConstr(u0 == 1)
+        # else:
+            # 非立方元素全为0
+            # m.addConstr(u0 == 0)
+
+    # L^{r}[i] = g^{r}[i] ^ R^{r-1}[i]
+    for i in range(16):
+        g = m.getVarByName("g^" + str(r) + "_" + str(i))
+        R_r_1 = m.getVarByName("R^" + str(r - 1) + "_" + str(i))
+        # if i == 0:
+            # m.addConstr(g + R_r_1 == 1)
+
+    L = m.getVarByName("L^" + str(r) + "_" + str(0))
+    m.addConstr(L == 1)
+
+    # 目标函数：令表示密钥的变量求和最大，最大值为超级多项式的次数
+
+    return m
+
+
+def main(r, I):
+    m = GenerateJModel(r)
+    m = SearchDegree(m, r, I)
+    m.setParam("PoolSearchMode", 2)
     m.write("angiejc.lp")
     m.optimize()
+    nSolutions = m.SolCount
+    for solution in range(nSolutions):
+        m.setParam(GRB.Param.SolutionNumber, solution)
+        m.write("angiejc_" + str(solution) + ".sol")
 
 if __name__ == '__main__':
-    main()
+    I = [i for i in range(0)]
+    main(1, I)
