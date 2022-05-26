@@ -1,6 +1,6 @@
 from gurobipy import *
 
-def KeySchedule(m, r): # 利用主密钥k生成第r轮的轮密钥并添加到模型中
+def KeySchedule(m, r, RK): # 利用主密钥k生成第r轮的轮密钥并添加到模型中
     m.update()
     if r / 2 <= 4:
         for i in range(16):
@@ -14,15 +14,24 @@ def KeySchedule(m, r): # 利用主密钥k生成第r轮的轮密钥并添加到�
             m.addConstr(- K_i_1_2 + flag >= 0)
             m.addConstr(- RK_i_1 - 2 * K_i_1_2 + flag + 1 >= 0)
 
-def KeyScheduleSingle(m, r):
+def KeyScheduleSingle(m, r, RK):
     m.update()
     if r / 2 <= 4:
         for i in range(16):
-            RK_i_1 = m.getVarByName("RK^" + str(r - 1) + "_" + str(i))
+            # RK_i_1 = m.getVarByName("RK^" + str(r - 1) + "_" + str(i))
             K_i_1_2 = m.getVarByName("K_" + str(int(((r - 1) / 2)) * 16 + i))
             flag = m.getVarByName("flag_" + str(int(((r - 1) / 2)) * 16 + i))
-            m.addConstr(RK_i_1 == K_i_1_2)
-            m.addConstr(RK_i_1 == flag)
+            m.addConstr(RK[i] == K_i_1_2)
+            m.addConstr(flag == K_i_1_2)
+
+# 所有未被使用的主密钥应当设置为0
+def KeyNotUsed(m, r):
+    for i in range(int((r + 1) / 2), 4):
+        for j in range(16):
+            K = m.getVarByName("K_" + str(i * 16 + j))
+            flag = m.getVarByName("flag_" + str(i * 16 + j))
+            m.addConstr(K == 0)
+            m.addConstr(flag == 0)
 
 # AND
 def L1(m, a, b, c, copys):
@@ -121,6 +130,12 @@ def GenerateJModel(r):
             R.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="R^" + str(i) + "_" + str(j)))
         for j in range(14):
             d.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="d^" + str(i) + "_" + str(j)))
+        # 密钥约束
+        if i % 2 == 1 and i == r: # 奇数轮次的最后一轮，例如7轮加密中的第7轮，没有取反的第8轮
+            KeyScheduleSingle(m, i, RK)
+        elif i % 2 == 0:
+            KeySchedule(m, i, RK)
+
         for j in range(16):
             RK_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy1")
             RK_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy2")
@@ -175,11 +190,9 @@ def GenerateJModel(r):
             L2(m, g[j], u[16 + j], L[j], [])
             L2(m, f[j], u[j], R[j], [])
 
-        if i % 2 == 1 and i == r: # 奇数轮次的最后一轮，例如7轮加密中的第7轮，没有取反的第8轮
-            KeyScheduleSingle(m, i)
-        elif i % 2 == 0:
-            KeySchedule(m, i)
         u = L + R
+
+    KeyNotUsed(m, r)
 
     return m
 
@@ -202,8 +215,8 @@ def SearchDegree(m, r, I):
         L = m.getVarByName("L^" + str(r) + "_" + str(i))
         R = m.getVarByName("R^" + str(r) + "_" + str(i))
         if i == 0:
-            m.addConstr(L == 1)
-            m.addConstr(R == 0)
+            m.addConstr(L == 0)
+            m.addConstr(R == 1)
         else:
             m.addConstr(L == 0)
             m.addConstr(R == 0)
@@ -221,13 +234,14 @@ def main(r, I):
     m.setParam("PoolSolutions", 2000000000)
     m.write("angiejc.lp")
     m.optimize()
-    '''
+
     nSolutions = m.SolCount
-    for solution in range(nSolutions):
+    for solution in range(10):
         m.setParam(GRB.Param.SolutionNumber, solution)
         m.write("angiejc_" + str(solution) + ".sol")
-        '''
+
 
 if __name__ == '__main__':
-    I = [i for i in range(31)]
+    # I = [i for i in range(31)]
+    I = [4, 5]
     main(1, I)
