@@ -1,5 +1,8 @@
 from gurobipy import *
 
+def PrintSuperPoly(m):
+    return
+
 def KeySchedule(m, r, RK): # 利用主密钥k生成第r轮的轮密钥并添加到模型中
     m.update()
     if r / 2 <= 4:
@@ -142,6 +145,7 @@ def GenerateJModel(r):
 
         # 轮函数约束
         for j in range(16):
+            # H1
             RK_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy1")
             RK_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy2")
             L_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="L^" + str(i - 1) + "_" + str(j) + "_copy1")
@@ -150,6 +154,8 @@ def GenerateJModel(r):
             RK[j] = RK_copy1
             u[j] = L_copy1
 
+        for j in range(16):
+            # H2
             R_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="R^" + str(i - 1) + "_" + str(j) + "_copy1")
             R_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="R^" + str(i - 1) + "_" + str(j) + "_copy2")
             if con_i[j] == 1:
@@ -162,22 +168,28 @@ def GenerateJModel(r):
                 m.addConstr(R_copy2 == b[j])
             u[j + 16] = R_copy1
 
+        for j in range(16):
+            # H3
             L2(m, a[j], b[j], c[j], [])
 
-            if j < 14:
-                c_1_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+1_copy1")
-                c_1_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+1_copy2")
-                c_2_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+2_copy1")
-                c_2_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+2_copy2")
-                L1(m, c[j + 1], c[j + 2], d[j], [c_1_copy1, c_1_copy2, c_2_copy1, c_2_copy2])
-                c[j + 1] = c_1_copy1
-                c[j + 2] = c_2_copy1
+        for j in range(14):
+            # H4
+            c_1_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+1_copy1")
+            c_1_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+1_copy2")
+            c_2_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+2_copy1")
+            c_2_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+2_copy2")
+            L1(m, c[j + 1], c[j + 2], d[j], [c_1_copy1, c_1_copy2, c_2_copy1, c_2_copy2])
+            c[j + 1] = c_1_copy1
+            c[j + 2] = c_2_copy1
 
+        for j in range(16):
+            # H5
             if j < 14:
                 L2(m, c[j], d[j], e[j], [])
             else:
                 m.addConstr(e[j] == c[j])
 
+        # H6
         for j in range(16):
             e_3_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+3_copy1")
             e_3_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+3_copy2")
@@ -189,14 +201,22 @@ def GenerateJModel(r):
             e[(j + 3) % 16] = e_3_copy1
             e[(j + 9) % 16] = e_9_copy1
             e[(j + 14) % 16] = e_14_copy1
+        for j in range(16):
+            m.addConstr(e[j] == 0)
 
+        # H7
         for j in range(16):
             f_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="f^" + str(i) + "_" + str(j) + "_copy1")
             f_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="f^" + str(i) + "_" + str(j) + "_copy2")
             L1(m, f[j], RK[j], g[j], [f_copy1, f_copy2])
             f[j] = f_copy1
 
+        for j in range(16):
+        # H8
             L2(m, g[j], u[16 + j], L[j], [])
+
+        for j in range(16):
+        # H9
             L2(m, f[j], u[j], R[j], [])
 
         u = L + R
@@ -244,13 +264,16 @@ def main(r, I):
     m.write("angiejc.lp")
     m.optimize()
 
-    nSolutions = m.SolCount
-    for solution in range(2):
+    # 输出超级多项式
+    PrintSuperPoly(m)
+
+    nSolutions = min(m.SolCount, 8)
+    for solution in range(nSolutions):
         m.setParam(GRB.Param.SolutionNumber, solution)
         m.write("angiejc_" + str(solution) + ".sol")
 
 
 if __name__ == '__main__':
-    # I = [i for i in range(31)]
+    # I = [i for i in range(27)]
     I = [4, 5]
     main(1, I)
