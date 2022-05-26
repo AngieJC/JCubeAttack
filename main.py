@@ -66,6 +66,9 @@ def L2(m, a, b, c, copys):
         m.addConstr(c >= b)
         m.addConstr(c == copys[1] + b)
     elif len(copys) == 4:
+        m.addConstr(copys[0] <= a)
+        m.addConstr(copys[1] <= a)
+        m.addConstr(a <= copys[0] + copys[1])
         m.addConstr(copys[2] <= b)
         m.addConstr(copys[3] <= b)
         m.addConstr(b <= copys[2] + copys[3])
@@ -84,7 +87,7 @@ def L3(m, a, b, c, d, copys):
     m.addConstr(copys[5] <= c)
     m.addConstr(c <= copys[4] + copys[5])
     m.addConstr(d == copys[1] + copys[3] + copys[5])
-    m.addConstr(d >= copys[1] + copys[3])
+    m.addConstr(d >= copys[3] + copys[5])
 
 def GenerateJModel(r):
     m = Model("JSuperPoly")
@@ -121,7 +124,7 @@ def GenerateJModel(r):
             a.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="a^" + str(i) + "_" + str(j)))
             b.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="b^" + str(i) + "_" + str(j)))
             if con_i[j] == 1:
-                constant_i_var.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="i^" + str(i) + "_" + str(j))) # 这里的i需要处理
+                constant_i_var.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="i^" + str(i) + "_" + str(j)))
             c.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j)))
             e.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j)))
             f.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="f^" + str(i) + "_" + str(j)))
@@ -130,12 +133,14 @@ def GenerateJModel(r):
             R.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="R^" + str(i) + "_" + str(j)))
         for j in range(14):
             d.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="d^" + str(i) + "_" + str(j)))
+
         # 密钥约束
         if i % 2 == 1 and i == r: # 奇数轮次的最后一轮，例如7轮加密中的第7轮，没有取反的第8轮
             KeyScheduleSingle(m, i, RK)
         elif i % 2 == 0:
             KeySchedule(m, i, RK)
 
+        # 轮函数约束
         for j in range(16):
             RK_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy1")
             RK_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="RK^" + str(i - 1) + "_" + str(j) + "_copy2")
@@ -151,31 +156,35 @@ def GenerateJModel(r):
                 L2(m, u[j + 16], constant_i_var[0], b[j], [R_copy1, R_copy2])
                 del(constant_i_var[0])
             else:
+                m.addConstr(u[j + 16] >= R_copy1)
+                m.addConstr(u[j + 16] >= R_copy2)
+                m.addConstr(u[j + 16] <= R_copy1 + R_copy2)
                 m.addConstr(R_copy2 == b[j])
             u[j + 16] = R_copy1
 
             L2(m, a[j], b[j], c[j], [])
 
             if j < 14:
-                c_1_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_1_" + str(j) + "_copy1")
-                c_1_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_1_" + str(j) + "_copy2")
-                c_2_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_2_" + str(j) + "_copy1")
-                c_2_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_2_" + str(j) + "_copy2")
+                c_1_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+1_copy1")
+                c_1_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+1_copy2")
+                c_2_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+2_copy1")
+                c_2_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="c^" + str(i) + "_" + str(j) + "+2_copy2")
                 L1(m, c[j + 1], c[j + 2], d[j], [c_1_copy1, c_1_copy2, c_2_copy1, c_2_copy2])
                 c[j + 1] = c_1_copy1
                 c[j + 2] = c_2_copy1
+
             if j < 14:
                 L2(m, c[j], d[j], e[j], [])
             else:
                 m.addConstr(e[j] == c[j])
 
         for j in range(16):
-            e_3_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_3_" + str(j) + "_copy1")
-            e_3_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_3_" + str(j) + "_copy2")
-            e_9_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_9_" + str(j) + "_copy1")
-            e_9_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_9_" + str(j) + "_copy2")
-            e_14_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_14_" + str(j) + "_copy1")
-            e_14_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_14_" + str(j) + "_copy2")
+            e_3_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+3_copy1")
+            e_3_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+3_copy2")
+            e_9_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+9_copy1")
+            e_9_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+9_copy2")
+            e_14_copy1 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+14_copy1")
+            e_14_copy2 = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="e^" + str(i) + "_" + str(j) + "+14_copy2")
             L3(m, e[(j + 3) % 16], e[(j + 9) % 16], e[(j + 14) % 16], f[j], [e_3_copy1, e_3_copy2, e_9_copy1, e_9_copy2, e_14_copy1, e_14_copy2])
             e[(j + 3) % 16] = e_3_copy1
             e[(j + 9) % 16] = e_9_copy1
@@ -197,7 +206,7 @@ def GenerateJModel(r):
     return m
 
 
-def SearchDegree(m, r, I):
+def SearchMonomial(m, r, I):
     for i in range(32):
         if i < 16:
             u0 = m.getVarByName("L^0_" + str(i))
@@ -229,14 +238,14 @@ def SearchDegree(m, r, I):
 
 def main(r, I):
     m = GenerateJModel(r)
-    m = SearchDegree(m, r, I)
+    m = SearchMonomial(m, r, I)
     m.setParam("PoolSearchMode", 2)
     m.setParam("PoolSolutions", 2000000000)
     m.write("angiejc.lp")
     m.optimize()
 
     nSolutions = m.SolCount
-    for solution in range(10):
+    for solution in range(2):
         m.setParam(GRB.Param.SolutionNumber, solution)
         m.write("angiejc_" + str(solution) + ".sol")
 
