@@ -1,7 +1,39 @@
 from gurobipy import *
 
 def PrintSuperPoly(m):
-    return
+    const = 0
+    Monomial_char = ["0" for i in range(64)]
+    SuperPoly = {}
+    nSolutions = m.SolCount
+    for solution in range(nSolutions):
+        m.setParam(GRB.Param.SolutionNumber, solution)
+        flag = 0
+        for i in range(64):
+            K = m.getVarByName("K_" + str(i))
+            if K.Xn > 0.5:
+                Monomial_char[i] = "1"
+                flag = 1
+        Monomial_str = "".join(Monomial_char)
+        if SuperPoly.get(Monomial_str):
+            SuperPoly[Monomial_str] = SuperPoly.get(Monomial_str) + 1
+        else:
+            SuperPoly[Monomial_str] = 1
+        if flag == 0:
+            const = const + 1
+
+    print("SuperPoly:")
+    if const % 2 == 1:
+        print("1", end=" ")
+        print(const)
+    for item in SuperPoly.items():
+        key = item[0]
+        times = item[1]
+        if times % 2 == 1:
+            for i in range(64):
+                if key[i] == "1":
+                    print("k", end="")
+                    print(i, end=" ")
+            print(times)
 
 def KeySchedule(m, r, RK): # 利用主密钥k生成第r轮的轮密钥并添加到模型中
     m.update()
@@ -261,16 +293,18 @@ def main(r, I):
     m = SearchMonomial(m, r, I)
     m.setParam("PoolSearchMode", 2)
     m.setParam("PoolSolutions", 2000000000)
-    m.write("angiejc.lp")
+    m.write("JCubeAttack.lp")
     m.optimize()
 
     # 输出超级多项式
     PrintSuperPoly(m)
 
+    '''
     nSolutions = min(m.SolCount, 8)
     for solution in range(nSolutions):
         m.setParam(GRB.Param.SolutionNumber, solution)
         m.write("angiejc_" + str(solution) + ".sol")
+    '''
 
 
 if __name__ == '__main__':
