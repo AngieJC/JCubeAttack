@@ -12,9 +12,9 @@ def PrintSuperPoly(m):
             K = m.getVarByName("K_" + str(i))
             Kflag = m.getVarByName("flag_" + str(i))
             if K.Xn > 0.5:
-                if 0.5 < Kflag.Xn < 1.5:
+                if Kflag.Xn < 0.5:
                     Monomial_char[i] = "1"
-                elif Kflag.Xn > 1.5:
+                elif Kflag.Xn > 0.5:
                     Monomial_char[i] = "2"
                 flag = 1
         if flag == 0:
@@ -54,11 +54,9 @@ def KeySchedule(m, r, RK): # 利用主密钥K对轮密钥RK生成约束
             RK_i_1 = m.getVarByName("RK^" + str(r - 1) + "_" + str(i))
             K_i_1_2 = m.getVarByName("K_" + str(int(((r - 1) / 2)) * 16 + i))
             flag = m.getVarByName("flag_" + str(int(((r - 1) / 2)) * 16 + i))
-            m.addConstr(RK_i_2 - RK_i_1 - 3 * K_i_1_2 + 2 * flag == 0)
-            m.addConstr(RK_i_1 + K_i_1_2 - flag >= 0)
-            m.addConstr(2 * K_i_1_2 - flag >= 0)
-            m.addConstr(- K_i_1_2 + flag >= 0)
-            m.addConstr(- RK_i_1 - 2 * K_i_1_2 + flag + 1 >= 0)
+            m.addConstr(RK_i_1 - flag == 0)
+            m.addConstr(RK_i_2 - K_i_1_2 + flag == 0)
+            m.addConstr(K_i_1_2 - flag >= 0)
 
 def KeyScheduleSingle(m, r, RK):
     m.update()
@@ -68,7 +66,7 @@ def KeyScheduleSingle(m, r, RK):
             K_i_1_2 = m.getVarByName("K_" + str(int(((r - 1) / 2)) * 16 + i))
             flag = m.getVarByName("flag_" + str(int(((r - 1) / 2)) * 16 + i))
             m.addConstr(RK[i] == K_i_1_2)
-            m.addConstr(flag == K_i_1_2)
+            m.addConstr(flag == 0)
 
 # 所有未被使用的主密钥应当设置为0
 def KeyNotUsed(m, r):
@@ -146,7 +144,7 @@ def GenerateJModel(r):
         R0.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="R^0_" + str(i)))
     for i in range(64):
         K.append(m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="K_" + str(i)))
-        flag.append(m.addVar(lb=0.0, ub=2.0, vtype=GRB.INTEGER, name="flag_" + str(i)))
+        flag.append(m.addVar(lb=0.0, ub=2.0, vtype=GRB.BINARY, name="flag_" + str(i)))
     u = L0 + R0
 
     for i in range(1, r + 1):
@@ -310,15 +308,15 @@ def main(r, I):
     # 输出超级多项式
     PrintSuperPoly(m)
 
-    '''
+
     nSolutions = min(m.SolCount, 8)
     for solution in range(nSolutions):
         m.setParam(GRB.Param.SolutionNumber, solution)
         m.write("angiejc_" + str(solution) + ".sol")
-    '''
+
 
 
 if __name__ == '__main__':
-    # I = [i for i in range(27)]
-    I = [4, 5]
-    main(2, I)
+    I = [i for i in range(10)]
+    # I = [4, 5]
+    main(4, I)
