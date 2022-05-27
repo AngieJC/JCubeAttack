@@ -10,8 +10,12 @@ def PrintSuperPoly(m):
         flag = 0
         for i in range(64):
             K = m.getVarByName("K_" + str(i))
+            Kflag = m.getVarByName("flag_" + str(i))
             if K.Xn > 0.5:
-                Monomial_char[i] = "1"
+                if 0.5 < Kflag.Xn < 1.5:
+                    Monomial_char[i] = "1"
+                elif Kflag.Xn > 1.5:
+                    Monomial_char[i] = "2"
                 flag = 1
         Monomial_str = "".join(Monomial_char)
         if SuperPoly.get(Monomial_str):
@@ -23,17 +27,22 @@ def PrintSuperPoly(m):
 
     print("SuperPoly:")
     if const % 2 == 1:
-        print("1", end=" ")
+        print("1\t", end="")
         print(const)
     for item in SuperPoly.items():
         key = item[0]
         times = item[1]
         if times % 2 == 1:
+            print(times, end="")
+            print("\t", end="")
             for i in range(64):
                 if key[i] == "1":
                     print("k", end="")
                     print(i, end=" ")
-            print(times)
+                elif key[i] == "2":
+                    print("!k", end="")
+                    print(i, end=" ")
+            print()
 
 def KeySchedule(m, r, RK): # 利用主密钥k生成第r轮的轮密钥并添加到模型中
     m.update()
@@ -310,4 +319,4 @@ def main(r, I):
 if __name__ == '__main__':
     # I = [i for i in range(27)]
     I = [4, 5]
-    main(1, I)
+    main(2, I)
