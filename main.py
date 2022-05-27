@@ -317,6 +317,6 @@ def main(r, I):
 
 
 if __name__ == '__main__':
-    I = [i for i in range(10)]
-    # I = [4, 5]
-    main(4, I)
+    # I = [i for i in range(10)]
+    I = [4 ,5]
+    main(2, I)
